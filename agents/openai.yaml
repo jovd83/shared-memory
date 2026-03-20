@@ -1,0 +1,9 @@
+interface:
+  display_name: "Shared Memory"
+  short_description: "Assess and store stable cross-agent knowledge"
+  default_prompt: "Use $shared-memory to assess whether information belongs in shared memory, then read, validate, write, or deprecate durable cross-agent knowledge without storing task-local or repo-local notes."
+  author: "jovd83"
+  version: "2.1.0"
+
+policy:
+  allow_implicit_invocation: true

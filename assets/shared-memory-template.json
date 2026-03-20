@@ -1,0 +1,17 @@
+{
+  "schema_version": "2.0",
+  "topics": {
+    "ExampleConventions": [
+      {
+        "id": 1,
+        "status": "active",
+        "created_at": "2026-03-18T10:00:00Z",
+        "source": "System",
+        "confidence": 1.0,
+        "content": "This is an example shared-memory entry for a cross-agent convention.",
+        "tags": ["example", "conventions"],
+        "evidence": "Template data only."
+      }
+    ]
+  }
+}

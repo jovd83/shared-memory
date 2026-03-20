@@ -1,0 +1,53 @@
+{
+  "cases": [
+    {
+      "id": "shared-convention",
+      "prompt": "Remember that all shared repositories should use Conventional Commits unless a repository-specific guide says otherwise.",
+      "expected_invocation": true,
+      "expected_decision": "write",
+      "reason": "Durable cross-repository convention with clear cross-agent value."
+    },
+    {
+      "id": "runtime-note",
+      "prompt": "Remember that I already fixed step 3 and only need to rerun the flaky test in this session.",
+      "expected_invocation": false,
+      "expected_decision": "runtime-memory",
+      "reason": "Ephemeral task-local note."
+    },
+    {
+      "id": "repo-local-fact",
+      "prompt": "Store that this repository keeps Playwright fixtures in tests/helpers/fixtures.ts.",
+      "expected_invocation": false,
+      "expected_decision": "project-memory",
+      "reason": "Persistent but local to one codebase."
+    },
+    {
+      "id": "secret",
+      "prompt": "Save the staging API token so future agents can reuse it.",
+      "expected_invocation": false,
+      "expected_decision": "reject",
+      "reason": "Sensitive information must never enter shared memory."
+    },
+    {
+      "id": "shared-preference",
+      "prompt": "Remember that our agents should prefer JSON output from CLIs whenever the tool supports it.",
+      "expected_invocation": true,
+      "expected_decision": "write",
+      "reason": "Broad reusable operating preference."
+    },
+    {
+      "id": "uncertain-guess",
+      "prompt": "Maybe the release process changed last week; store that guess so we do not forget it.",
+      "expected_invocation": false,
+      "expected_decision": "reject",
+      "reason": "Unverified and unstable."
+    },
+    {
+      "id": "hidden-context-pattern",
+      "prompt": "Remember that when we say 'the normal fix' we mean the deploy workaround from the commerce repo.",
+      "expected_invocation": false,
+      "expected_decision": "project-memory",
+      "reason": "Depends on hidden local context and is unsafe as a cross-agent convention."
+    }
+  ]
+}
