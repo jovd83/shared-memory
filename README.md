@@ -219,23 +219,6 @@ The diagram below shows the relationship between task context, local persistence
 
 ![Shared Memory Conceptual Diagram](./shared-memory.png)
 
-```mermaid
-flowchart TB
-    A["Task / Thread Context"]
-    B["Runtime Memory<br/>(ephemeral)"]
-    C["Project / Skill Memory<br/>(persistent but local)"]
-    D["Shared Memory<br/>(this skill)<br/>persistent and cross-agent"]
-    E["Agent Runtime"]
-
-    A --> B
-    E --> B
-    E --> C
-    E --> D
-    C -->|promote only stable reusable items| D
-
-    style D fill:#2563eb,stroke:#1e3a8a,color:#ffffff,stroke-width:3px
-```
-
 ## Evaluation And Testing
 
 This repository includes two validation layers:
