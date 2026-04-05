@@ -143,6 +143,14 @@ Avoid entries that are:
 - Deprecate outdated entries instead of deleting them so the audit trail remains intact.
 - If confidence is low, either gather evidence first or do not write the entry.
 
+## Gotchas
+
+- **Direct File Editing**: Manually editing the `~/.agent_shared_memory.json` file can cause validation errors and data loss if the CLI overwrites it. Always use the provided CLI tools.
+- **Topic Fragmentation**: Creating near-duplicate topic names (e.g., `CommitConvention` vs `CommitConventions`) fractures memory. Search and read existing topics before adding new ones.
+- **Implicit Context Dependency**: Storing entries that rely on local paths or repository-specific knowledge ("use the build script") makes them useless to other agents. Ensure entries are context-independent.
+- **Low Confidence Promotion**: Promoting information with a confidence lower than 0.5 will trigger warnings in `validate` and risk polluting the store with unstable guidance.
+- **Deletion vs Deprecation**: Attempting to delete an entry manually is discouraged. Use the `deprecate` command to maintain a stable audit trail for all shared knowledge.
+
 ## Failure Handling
 
 - If `assess` returns `project-memory`, `runtime-memory`, or `reject`, honor that boundary instead of forcing a write.
