@@ -4,8 +4,15 @@ description: Deliberately assess, retrieve, validate, write, or deprecate persis
 metadata:
   author: jovd83
   version: "1.0.0"
+  dispatcher-output-artifacts: shared_policy_entry, policy_lookup_result, deprecation_record
+  dispatcher-risk: medium
+  dispatcher-writes-files: true
+  dispatcher-input-artifacts: memory_query, policy_candidate, validation_evidence, deprecation_request
+  dispatcher-capabilities: shared-policy-management, memory-curation, durable-convention-storage
+  dispatcher-stack-tags: memory, governance, cross-project
+  dispatcher-accepted-intents: read_shared_policy, write_shared_policy, deprecate_shared_policy
+  dispatcher-category: governance
 ---
-
 # Shared Memory
 
 Use this skill only for deliberate promotion of durable cross-agent knowledge.
