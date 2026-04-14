@@ -2,7 +2,15 @@
 
 All notable changes to this skill are documented here.
 
+## [2.2.0] - 2026-04-14
+
+### Changed
+
+- Mandatory telemetry and logging enforced via $skill-dispatcher for all memory operations.
+- Versioned documentation headers for improved repository clarity.
+
 ## [2.1.0] - 2026-03-20
+
 
 ### Changed
 

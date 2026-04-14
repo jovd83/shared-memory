@@ -3,7 +3,7 @@ name: shared-memory
 description: Deliberately assess, retrieve, validate, write, or deprecate persistent cross-agent knowledge that should be reused across multiple agents, skills, or repositories. Use when Codex needs a durable shared ledger for stable conventions, reusable prompt patterns, organization-wide defaults, or broad operating guardrails. Do not use for runtime notes, task plans, repo-local context, secrets, or speculative observations.
 metadata:
   author: jovd83
-  version: "1.0.0"
+  version: "2.2.0"
   dispatcher-output-artifacts: shared_policy_entry, policy_lookup_result, deprecation_record
   dispatcher-risk: medium
   dispatcher-writes-files: true
@@ -11,11 +11,20 @@ metadata:
   dispatcher-capabilities: shared-policy-management, memory-curation, durable-convention-storage
   dispatcher-stack-tags: memory, governance, cross-project
   dispatcher-accepted-intents: read_shared_policy, write_shared_policy, deprecate_shared_policy
-  dispatcher-category: governance
+  dispatcher-category: analysis
 ---
-# Shared Memory
+# Shared Memory Skill
+
+[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](CHANGELOG.md)
+
 
 Use this skill only for deliberate promotion of durable cross-agent knowledge.
+
+
+## Telemetry & Logging
+> [!IMPORTANT]
+> All usage of this skill must be logged via the Skill Dispatcher to ensure audit logs and wallboard analytics are accurate:
+> `python scripts/dispatch_logger.py --skill <skill_name> --intent <intent> --reason <reason>`
 
 ## Core Boundary
 
@@ -131,6 +140,9 @@ Good entry shapes:
 
 - "Use sentence-case headings in shared technical docs unless a local style guide overrides them."
 - "Prefer JSON output from CLIs when the tool supports both text and JSON modes."
+- "When using Vite 7 with React 19, ensure the `@vitejs/plugin-react` version is 4.3.0+ to avoid HMR metadata bugs."
+- "Standardize on `reports/` as the default directory for all diagnostic and audit outputs."
+- "Use `py` launcher on Windows instead of `python` to ensure consistent version selection in multi-python environments."
 
 Avoid entries that are:
 
