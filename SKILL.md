@@ -17,7 +17,7 @@ metadata:
 ---
 # Shared Memory Skill
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](CHANGELOG.md)
 
 
 Use this skill only for deliberate promotion of durable cross-agent knowledge.
