@@ -2,8 +2,8 @@
 name: shared-memory
 description: Deliberately assess, retrieve, validate, write, or deprecate persistent cross-agent knowledge that should be reused across multiple agents, skills, or repositories. Use when Codex needs a durable shared ledger for stable conventions, reusable prompt patterns, organization-wide defaults, or broad operating guardrails. Do not use for runtime notes, task plans, repo-local context, secrets, or speculative observations.
 metadata:
-    dispatcher-layer: information
-    dispatcher-lifecycle: active
+  dispatcher-layer: information
+  dispatcher-lifecycle: active
   author: jovd83
   version: "2.4.0"
   dispatcher-output-artifacts: shared_policy_entry, policy_lookup_result, deprecation_record
