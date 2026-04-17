@@ -15,18 +15,17 @@ metadata:
   dispatcher-accepted-intents: read_shared_policy, write_shared_policy, deprecate_shared_policy
   dispatcher-category: analysis
 ---
-# Shared Memory Skill
-
-[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](CHANGELOG.md)
-
-
-Use this skill only for deliberate promotion of durable cross-agent knowledge.
-
 
 ## Telemetry & Logging
 > [!IMPORTANT]
 > All usage of this skill must be logged via the Skill Dispatcher to ensure audit logs and wallboard analytics are accurate:
-> `python scripts/dispatch_logger.py --skill <skill_name> --intent <intent> --reason <reason>`
+> `./log-dispatch.cmd --skill <skill_name> --intent <intent> --reason <reason>` (or `./log-dispatch.sh` on Linux)
+
+# Shared Memory Skill
+
+[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](CHANGELOG.md)
+
+Use this skill only for deliberate promotion of durable cross-agent knowledge.
 
 ## Core Boundary
 
