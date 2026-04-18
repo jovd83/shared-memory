@@ -1,8 +1,5 @@
 # Shared Memory Skill
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](CHANGELOG.md)
-
-
 `shared-memory` is an Agent Skill for deliberate, auditable cross-agent memory.
 
 It gives agents a narrow, explicit way to assess, retrieve, validate, write, and deprecate durable knowledge that should be reused across multiple agents, skills, or repositories. It is intentionally not a general memory system, a task scratchpad, or a place to hide project-local facts.
@@ -43,6 +40,18 @@ This skill solves that specific problem by providing:
 - a versioned schema with validation
 - an auditable deprecation model instead of deletion
 - tests and evaluation artifacts for maintainers
+
+## New Capabilities In This Sync
+
+This source repository now includes several policy-oriented upgrades that make shared memory safer to consume from automation, not just easier to write to:
+
+- **Assessed Promotion Workflow**: `manage_memory.py promote` lets an agent assess a candidate and write it in one audited step instead of manually chaining `assess` and `write`.
+- **Confidence-Gated Reads**: `read` and `search` can filter out low-confidence entries so automation can avoid weak policy guidance.
+- **Freshness-Gated Reads**: entries can carry `last_reviewed_at` and `review_after_days`, which lets consuming tools ignore stale policy until it is reviewed.
+- **Policy Metadata**: entries can now include a lightweight `kind` such as `policy`, `convention`, `preference`, or `fact` so downstream consumers can reason about them more safely.
+- **Routing Policy Support**: the shared store can now act as the cross-project default layer for dispatcher routing policies without turning into a general task scratchpad.
+
+The practical effect is that agents can now post stable cross-project guidance themselves through the CLI, while readers can apply stronger trust and freshness boundaries before using that guidance.
 
 ## Repository Layout
 
@@ -120,6 +129,24 @@ python scripts/manage_memory.py write \
   --format json
 ```
 
+Promote a candidate through the boundary gate and write only if it truly belongs in shared memory:
+
+```bash
+python scripts/manage_memory.py promote \
+  --candidate "Prefer repo-native stacks over shared defaults unless compliance requires otherwise." \
+  --topic "RoutingPolicies" \
+  --source "SkillDispatcher" \
+  --confidence 0.92 \
+  --tags "routing,policy" \
+  --kind "policy" \
+  --review-after-days 365 \
+  --scope cross-agent \
+  --stability stable \
+  --sensitivity internal \
+  --context-independent yes \
+  --format json
+```
+
 Deprecate an outdated entry:
 
 ```bash
@@ -145,6 +172,7 @@ Supported commands:
 - `search`
 - `read`
 - `write`
+- `promote`
 - `deprecate`
 - `validate`
 
@@ -156,6 +184,7 @@ The CLI is designed for agentic use first:
 - Legacy flat stores are normalized on read.
 - Deprecated entries remain in the audit trail.
 - Exact active duplicates within a topic are blocked by default.
+- Reads can filter by confidence and freshness for policy-safe consumption.
 
 Run `python scripts/manage_memory.py <command> --help` for full flags.
 
@@ -188,11 +217,14 @@ The store uses a versioned JSON schema:
         "id": 1,
         "status": "active",
         "created_at": "2026-03-18T10:00:00Z",
+        "last_reviewed_at": "2026-03-18T10:00:00Z",
         "source": "Codex",
         "confidence": 0.95,
         "content": "Use Conventional Commits across shared repositories unless a repository-specific guide overrides them.",
+        "kind": "policy",
         "tags": ["git", "conventions"],
-        "evidence": "Observed in shared engineering guidance."
+        "evidence": "Observed in shared engineering guidance.",
+        "review_after_days": 365
       }
     ]
   }

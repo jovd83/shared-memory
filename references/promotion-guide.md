@@ -115,3 +115,23 @@ Expected decision outcomes:
 - `reject`
 
 Treat those outcomes as architectural boundaries, not suggestions to work around.
+
+When the boundary is already clear and you want an assessed write in one step, use `promote`:
+
+```bash
+python scripts/manage_memory.py promote \
+  --candidate "Prefer repo-native stacks over shared defaults unless compliance requires otherwise." \
+  --topic "RoutingPolicies" \
+  --source "SkillDispatcher" \
+  --confidence 0.92 \
+  --tags "routing,policy" \
+  --kind "policy" \
+  --review-after-days 365 \
+  --scope cross-agent \
+  --stability stable \
+  --sensitivity internal \
+  --context-independent yes \
+  --format json
+```
+
+For routing or policy topics that drive automation, prefer setting `review_after_days` so stale entries can be filtered automatically by consumers.

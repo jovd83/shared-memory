@@ -60,6 +60,8 @@ If any condition fails:
 - `references/schema.md`: canonical store schema and CLI response contract
 - `assets/shared-memory-template.json`: example store layout
 
+If the boundary is clear and you already have the candidate plus metadata, you may use the `promote` command as a one-step assessed write instead of chaining `assess` and `write` manually.
+
 ## Required Workflow
 
 1. Assess the candidate before writing if the boundary is not obviously shared.
@@ -116,6 +118,24 @@ python scripts/manage_memory.py deprecate \
 python scripts/manage_memory.py validate --format json
 ```
 
+Optional shortcut for stable candidates that are ready for promotion:
+
+```bash
+python scripts/manage_memory.py promote \
+  --candidate "Prefer repo-native stacks over shared defaults unless compliance requires otherwise." \
+  --topic "RoutingPolicies" \
+  --source "SkillDispatcher" \
+  --confidence 0.92 \
+  --tags "routing,policy" \
+  --kind "policy" \
+  --review-after-days 365 \
+  --scope cross-agent \
+  --stability stable \
+  --sensitivity internal \
+  --context-independent yes \
+  --format json
+```
+
 ## Response Contract
 
 When you use this skill, drive to one of four explicit outcomes:
@@ -144,6 +164,7 @@ Good entry shapes:
 - "When using Vite 7 with React 19, ensure the `@vitejs/plugin-react` version is 4.3.0+ to avoid HMR metadata bugs."
 - "Standardize on `reports/` as the default directory for all diagnostic and audit outputs."
 - "Use `py` launcher on Windows instead of `python` to ensure consistent version selection in multi-python environments."
+- "For existing repositories, prefer repo-native stacks over shared defaults unless a compliance rule overrides them."
 
 Avoid entries that are:
 

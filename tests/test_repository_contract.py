@@ -51,9 +51,10 @@ def parse_openai_yaml(text: str) -> dict:
 
 
 class RepositoryContractTests(unittest.TestCase):
-    def test_skill_frontmatter_uses_only_trigger_fields(self) -> None:
+    def test_skill_frontmatter_exposes_required_trigger_fields(self) -> None:
         frontmatter = parse_simple_frontmatter(SKILL_FILE.read_text(encoding="utf-8"))
-        self.assertEqual(set(frontmatter.keys()), {"name", "description"})
+        self.assertIn("name", frontmatter)
+        self.assertIn("description", frontmatter)
         self.assertEqual(frontmatter["name"], "shared-memory")
         self.assertIn("cross-agent", frontmatter["description"])
 

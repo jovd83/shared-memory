@@ -199,6 +199,103 @@ class ManageMemoryCliTests(unittest.TestCase):
         self.assertEqual(payload["assessment"]["decision"], "reject")
         self.assertFalse(payload["assessment"]["should_invoke_skill"])
 
+    def test_read_filters_low_confidence_and_stale_entries(self) -> None:
+        store = {
+            "schema_version": "2.0",
+            "topics": {
+                "RoutingPolicies": [
+                    {
+                        "id": 1,
+                        "status": "active",
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "last_reviewed_at": "2024-01-01T00:00:00Z",
+                        "review_after_days": 30,
+                        "source": "UnitTest",
+                        "confidence": 0.95,
+                        "content": "Old policy that should be treated as stale.",
+                        "tags": ["routing"],
+                    },
+                    {
+                        "id": 2,
+                        "status": "active",
+                        "created_at": "2026-04-01T00:00:00Z",
+                        "last_reviewed_at": "2026-04-01T00:00:00Z",
+                        "review_after_days": 365,
+                        "source": "UnitTest",
+                        "confidence": 0.9,
+                        "content": "Fresh policy that should remain readable.",
+                        "tags": ["routing"],
+                    },
+                    {
+                        "id": 3,
+                        "status": "active",
+                        "created_at": "2026-04-10T00:00:00Z",
+                        "last_reviewed_at": "2026-04-10T00:00:00Z",
+                        "review_after_days": 365,
+                        "source": "UnitTest",
+                        "confidence": 0.2,
+                        "content": "Low confidence policy that should be filtered.",
+                        "tags": ["routing"],
+                    },
+                ]
+            },
+        }
+        self.memory_file.write_text(json.dumps(store), encoding="utf-8")
+
+        result = self.run_cli(
+            "read",
+            "--topic",
+            "RoutingPolicies",
+            "--min-confidence",
+            "0.8",
+            "--max-age-days",
+            "365",
+        )
+        payload = self.parse_stdout(result)
+        self.assertEqual(len(payload["entries"]), 1)
+        self.assertEqual(payload["entries"][0]["content"], "Fresh policy that should remain readable.")
+        self.assertEqual(payload["skipped"]["stale"], 1)
+        self.assertEqual(payload["skipped"]["low_confidence"], 1)
+
+    def test_promote_writes_candidate_only_when_boundary_passes(self) -> None:
+        result = self.run_cli(
+            "promote",
+            "--candidate",
+            "Prefer repository-native stacks over shared defaults unless compliance requires otherwise.",
+            "--topic",
+            "RoutingPolicies",
+            "--source",
+            "UnitTest",
+            "--confidence",
+            "0.92",
+            "--tags",
+            "routing,policy",
+            "--kind",
+            "policy",
+            "--review-after-days",
+            "365",
+            "--scope",
+            "cross-agent",
+            "--stability",
+            "stable",
+            "--sensitivity",
+            "internal",
+            "--context-independent",
+            "yes",
+        )
+        payload = self.parse_stdout(result)
+        self.assertTrue(payload["created"])
+        self.assertEqual(payload["topic"], "RoutingPolicies")
+        self.assertEqual(payload["entry"]["kind"], "policy")
+
+        read_result = self.run_cli("read", "--topic", "RoutingPolicies")
+        read_payload = self.parse_stdout(read_result)
+        self.assertEqual(len(read_payload["entries"]), 1)
+        self.assertEqual(
+            read_payload["entries"][0]["content"],
+            "Prefer repository-native stacks over shared defaults unless compliance requires otherwise.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

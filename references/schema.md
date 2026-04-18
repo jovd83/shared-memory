@@ -23,11 +23,14 @@ The file is created on the first successful write if it does not already exist.
         "id": 1,
         "status": "active",
         "created_at": "2026-03-18T10:00:00Z",
+        "last_reviewed_at": "2026-03-18T10:00:00Z",
         "source": "Codex",
         "confidence": 0.95,
         "content": "Use Conventional Commits across shared repositories unless a repository-specific guide overrides them.",
+        "kind": "policy",
         "tags": ["git", "conventions"],
-        "evidence": "Observed in shared engineering guidance across multiple repositories."
+        "evidence": "Observed in shared engineering guidance across multiple repositories.",
+        "review_after_days": 365
       }
     ]
   }
@@ -41,11 +44,14 @@ The file is created on the first successful write if it does not already exist.
 | `id` | integer | Yes | Unique within a topic |
 | `status` | string | Yes | `active` or `deprecated` |
 | `created_at` | string | Yes | UTC timestamp in ISO 8601 form |
+| `last_reviewed_at` | string | No | UTC timestamp used for freshness checks; defaults to `created_at` on new writes |
 | `source` | string | Yes | Agent, maintainer, or system identifier |
 | `confidence` | number | Yes | Floating-point value from `0.0` to `1.0` |
 | `content` | string | Yes | Reusable shared-memory statement |
+| `kind` | string | No | Optional label such as `policy`, `convention`, `preference`, or `fact` |
 | `tags` | array of strings | No | Lightweight discovery aids |
 | `evidence` | string | No | Short explanation for why the entry is trustworthy |
+| `review_after_days` | integer | No | Optional freshness window used by policy-safe reads |
 | `deprecated_at` | string | No | Present when `status` is `deprecated` |
 | `deprecation_reason` | string | No | Audit note explaining the deprecation |
 
@@ -110,6 +116,7 @@ Each match contains:
 
 - `topic`
 - `entry`
+- `filters`
 
 ### `read`
 
@@ -117,6 +124,8 @@ Returns:
 
 - `topic`
 - `entries`
+- `filters`
+- `skipped`
 
 ### `write`
 
@@ -128,6 +137,17 @@ Returns:
 - `dry_run` when requested
 
 If an exact active duplicate is found, `created` is `false` and `reason` is `duplicate_active_entry`.
+
+### `promote`
+
+Returns:
+
+- `candidate`
+- `assessment`
+- `created`
+- `topic`
+- `entry` when promotion succeeds or hits a duplicate
+- `redirect` and `recommended_action` when the candidate belongs in project memory, runtime memory, or reject
 
 ### `deprecate`
 

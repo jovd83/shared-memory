@@ -83,6 +83,29 @@ def ensure_confidence(confidence: float) -> float:
     return round(value, 4)
 
 
+def ensure_positive_int(value: Optional[int], field_name: str) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError) as exc:
+        raise InputValidationError(f"{field_name} must be an integer.") from exc
+    if normalized <= 0:
+        raise InputValidationError(f"{field_name} must be a positive integer.")
+    return normalized
+
+
+def normalize_kind(kind: Optional[str]) -> Optional[str]:
+    if kind is None:
+        return None
+    cleaned = kind.strip().lower().replace(" ", "-")
+    if not cleaned:
+        return None
+    if len(cleaned) > 40:
+        raise InputValidationError("Kind must be 40 characters or fewer.")
+    return cleaned
+
+
 def normalize_tags(raw_tags: Optional[Any]) -> List[str]:
     if raw_tags is None:
         return []
@@ -105,6 +128,97 @@ def normalize_tags(raw_tags: Optional[Any]) -> List[str]:
         seen.add(lowered)
         normalized.append(tag)
     return normalized
+
+
+def parse_timestamp(raw_value: str, field_name: str) -> datetime:
+    normalized = str(raw_value).strip()
+    if not normalized:
+        raise InputValidationError(f"{field_name} must not be empty.")
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise InputValidationError(
+            f"{field_name} must be an ISO 8601 timestamp."
+        ) from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def entry_reference_timestamp(entry: Dict[str, Any]) -> datetime:
+    raw_value = entry.get("last_reviewed_at") or entry.get("created_at")
+    return parse_timestamp(str(raw_value), "Entry timestamp")
+
+
+def entry_age_days(entry: Dict[str, Any], now: Optional[datetime] = None) -> int:
+    now_utc = now or datetime.now(timezone.utc)
+    delta = now_utc - entry_reference_timestamp(entry)
+    return max(0, delta.days)
+
+
+def entry_is_stale(
+    entry: Dict[str, Any],
+    max_age_days: Optional[int],
+    now: Optional[datetime] = None,
+) -> bool:
+    threshold = max_age_days
+    review_after_days = entry.get("review_after_days")
+    if review_after_days is not None:
+        threshold = (
+            review_after_days
+            if threshold is None
+            else min(int(review_after_days), threshold)
+        )
+    if threshold is None:
+        return False
+    return entry_age_days(entry, now=now) > threshold
+
+
+def apply_entry_filters(
+    entries: List[Dict[str, Any]],
+    include_deprecated: bool,
+    min_confidence: float,
+    max_age_days: Optional[int],
+    include_stale: bool,
+) -> Dict[str, Any]:
+    filtered: List[Dict[str, Any]] = []
+    skipped = {"deprecated": 0, "low_confidence": 0, "stale": 0}
+    now_utc = datetime.now(timezone.utc)
+
+    for entry in entries:
+        if not include_deprecated and entry["status"] == DEPRECATED_STATUS:
+            skipped["deprecated"] += 1
+            continue
+        if entry["confidence"] < min_confidence:
+            skipped["low_confidence"] += 1
+            continue
+
+        annotated_entry = dict(entry)
+        annotated_entry["age_days"] = entry_age_days(entry, now=now_utc)
+        annotated_entry["stale"] = entry_is_stale(
+            entry,
+            max_age_days=max_age_days,
+            now=now_utc,
+        )
+
+        if annotated_entry["stale"] and not include_stale:
+            skipped["stale"] += 1
+            continue
+
+        filtered.append(annotated_entry)
+
+    return {
+        "entries": filtered,
+        "filters": {
+            "include_deprecated": include_deprecated,
+            "include_stale": include_stale,
+            "min_confidence": min_confidence,
+            "max_age_days": max_age_days,
+        },
+        "skipped": skipped,
+    }
 
 
 def normalize_entry(topic: str, raw_entry: Dict[str, Any], fallback_id: int) -> Dict[str, Any]:
@@ -146,9 +260,27 @@ def normalize_entry(topic: str, raw_entry: Dict[str, Any], fallback_id: int) -> 
         "tags": tags,
     }
 
+    kind = normalize_kind(raw_entry.get("kind"))
+    if kind:
+        normalized["kind"] = kind
+
     evidence = raw_entry.get("evidence")
     if evidence:
         normalized["evidence"] = str(evidence).strip()
+
+    last_reviewed_at = raw_entry.get("last_reviewed_at")
+    if last_reviewed_at:
+        normalized["last_reviewed_at"] = (
+            parse_timestamp(str(last_reviewed_at), "last_reviewed_at")
+            .strftime("%Y-%m-%dT%H:%M:%SZ")
+        )
+
+    review_after_days = raw_entry.get("review_after_days")
+    if review_after_days is not None:
+        normalized["review_after_days"] = ensure_positive_int(
+            review_after_days,
+            "review_after_days",
+        )
 
     deprecated_at = raw_entry.get("deprecated_at")
     if deprecated_at:
@@ -276,6 +408,9 @@ def search_entries(
     query: str,
     topic_filter: Optional[str],
     include_deprecated: bool,
+    include_stale: bool,
+    min_confidence: float,
+    max_age_days: Optional[int],
     limit: int,
 ) -> Dict[str, Any]:
     query_text = query.strip().lower()
@@ -288,9 +423,14 @@ def search_entries(
     for topic in sorted(store["topics"]):
         if requested_topic and topic != requested_topic:
             continue
-        for entry in store["topics"][topic]:
-            if not include_deprecated and entry["status"] == DEPRECATED_STATUS:
-                continue
+        filtered_entries = apply_entry_filters(
+            store["topics"][topic],
+            include_deprecated=include_deprecated,
+            include_stale=include_stale,
+            min_confidence=min_confidence,
+            max_age_days=max_age_days,
+        )
+        for entry in filtered_entries["entries"]:
             haystack = " ".join(
                 [topic, entry["content"], entry["source"], " ".join(entry.get("tags", []))]
             ).lower()
@@ -308,6 +448,13 @@ def search_entries(
         "schema_version": SCHEMA_VERSION,
         "query": query,
         "matches": matches,
+        "filters": {
+            "topic": requested_topic,
+            "include_deprecated": include_deprecated,
+            "include_stale": include_stale,
+            "min_confidence": min_confidence,
+            "max_age_days": max_age_days,
+        },
     }
 
 
@@ -316,19 +463,28 @@ def read_topic(
     memory_file: Path,
     topic: str,
     include_deprecated: bool,
+    include_stale: bool,
+    min_confidence: float,
+    max_age_days: Optional[int],
 ) -> Dict[str, Any]:
     topic_name = ensure_topic_name(topic)
     entries = store["topics"].get(topic_name, [])
-    filtered = [
-        entry for entry in entries if include_deprecated or entry["status"] != DEPRECATED_STATUS
-    ]
+    filtered_entries = apply_entry_filters(
+        entries,
+        include_deprecated=include_deprecated,
+        include_stale=include_stale,
+        min_confidence=min_confidence,
+        max_age_days=max_age_days,
+    )
 
     return {
         "command": "read",
         "memory_file": str(memory_file),
         "schema_version": SCHEMA_VERSION,
         "topic": topic_name,
-        "entries": filtered,
+        "entries": filtered_entries["entries"],
+        "filters": filtered_entries["filters"],
+        "skipped": filtered_entries["skipped"],
     }
 
 
@@ -341,6 +497,8 @@ def write_entry(
     confidence: float,
     tags: List[str],
     evidence: Optional[str],
+    kind: Optional[str],
+    review_after_days: Optional[int],
     allow_duplicate: bool,
     dry_run: bool,
 ) -> Dict[str, Any]:
@@ -350,6 +508,11 @@ def write_entry(
     normalized_confidence = ensure_confidence(confidence)
     normalized_tags = normalize_tags(tags)
     normalized_evidence = evidence.strip() if evidence else None
+    normalized_kind = normalize_kind(kind)
+    normalized_review_after_days = ensure_positive_int(
+        review_after_days,
+        "--review-after-days",
+    )
 
     entries = store["topics"].setdefault(topic_name, [])
     candidate_key = normalized_content_key(normalized_content)
@@ -369,17 +532,23 @@ def write_entry(
                 }
 
     next_id = max((entry["id"] for entry in entries), default=0) + 1
+    created_at = utc_now()
     entry = {
         "id": next_id,
         "status": ACTIVE_STATUS,
-        "created_at": utc_now(),
+        "created_at": created_at,
+        "last_reviewed_at": created_at,
         "source": normalized_source,
         "confidence": normalized_confidence,
         "content": normalized_content,
         "tags": normalized_tags,
     }
+    if normalized_kind:
+        entry["kind"] = normalized_kind
     if normalized_evidence:
         entry["evidence"] = normalized_evidence
+    if normalized_review_after_days is not None:
+        entry["review_after_days"] = normalized_review_after_days
 
     if not dry_run:
         entries.append(entry)
@@ -394,6 +563,77 @@ def write_entry(
         "entry": entry,
         "dry_run": dry_run,
     }
+
+
+def promote_candidate(
+    store: Dict[str, Any],
+    memory_file: Path,
+    candidate: str,
+    scope: str,
+    stability: str,
+    sensitivity: str,
+    context_independent: str,
+    topic: str,
+    source: str,
+    confidence: float,
+    tags: List[str],
+    evidence: Optional[str],
+    kind: Optional[str],
+    review_after_days: Optional[int],
+    allow_duplicate: bool,
+    dry_run: bool,
+) -> Dict[str, Any]:
+    assessment_result = assess_candidate(
+        candidate=candidate,
+        scope=scope,
+        stability=stability,
+        sensitivity=sensitivity,
+        context_independent=context_independent,
+    )
+    decision = assessment_result["assessment"]["decision"]
+    response: Dict[str, Any] = {
+        "command": "promote",
+        "memory_file": str(memory_file),
+        "schema_version": SCHEMA_VERSION,
+        "candidate": assessment_result["candidate"],
+        "assessment": assessment_result["assessment"],
+        "topic": ensure_topic_name(topic),
+    }
+
+    if decision != "shared-memory":
+        response.update(
+            {
+                "created": False,
+                "redirect": decision,
+                "recommended_action": assessment_result["assessment"]["recommended_action"],
+            }
+        )
+        return response
+
+    write_result = write_entry(
+        store=store,
+        memory_file=memory_file,
+        topic=topic,
+        content=candidate,
+        source=source,
+        confidence=confidence,
+        tags=tags,
+        evidence=evidence,
+        kind=kind,
+        review_after_days=review_after_days,
+        allow_duplicate=allow_duplicate,
+        dry_run=dry_run,
+    )
+    response.update(
+        {
+            "created": write_result["created"],
+            "entry": write_result["entry"],
+            "dry_run": dry_run,
+        }
+    )
+    if not write_result["created"]:
+        response["reason"] = write_result.get("reason")
+    return response
 
 
 def assess_candidate(
@@ -588,6 +828,16 @@ def collect_issues(store: Dict[str, Any]) -> List[Dict[str, str]]:
                     }
                 )
 
+            if entry_is_stale(entry, max_age_days=None):
+                issues.append(
+                    {
+                        "severity": "warning",
+                        "topic": topic,
+                        "entry_id": str(entry_id),
+                        "message": f"Entry id {entry_id} in topic '{topic}' is stale and should be reviewed before reuse.",
+                    }
+                )
+
     return issues
 
 
@@ -665,6 +915,22 @@ def render_text(result: Dict[str, Any]) -> str:
             return f"Created entry #{entry['id']} in topic '{result['topic']}'{suffix}."
         return (
             f"Skipped write for topic '{result['topic']}' because an active duplicate already exists "
+            f"(entry #{entry['id']})."
+        )
+
+    if command == "promote":
+        if result["created"]:
+            entry = result["entry"]
+            suffix = " (dry-run)" if result.get("dry_run") else ""
+            return f"Promoted candidate into topic '{result['topic']}' as entry #{entry['id']}{suffix}."
+        if result["assessment"]["decision"] != "shared-memory":
+            return (
+                f"Promotion redirected to {result['redirect']}: "
+                f"{result['recommended_action']}"
+            )
+        entry = result["entry"]
+        return (
+            f"Skipped promotion for topic '{result['topic']}' because an active duplicate already exists "
             f"(entry #{entry['id']})."
         )
 
@@ -772,6 +1038,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include deprecated entries in results.",
     )
     search_parser.add_argument(
+        "--include-stale",
+        action="store_true",
+        help="Include stale entries that would normally be filtered out by freshness checks.",
+    )
+    search_parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.0,
+        help="Filter out entries below this confidence threshold.",
+    )
+    search_parser.add_argument(
+        "--max-age-days",
+        type=int,
+        help="Filter out entries older than this many days unless --include-stale is set.",
+    )
+    search_parser.add_argument(
         "--limit",
         type=int,
         default=20,
@@ -788,6 +1070,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-deprecated",
         action="store_true",
         help="Include deprecated entries in the output.",
+    )
+    read_parser.add_argument(
+        "--include-stale",
+        action="store_true",
+        help="Include stale entries that would normally be filtered out by freshness checks.",
+    )
+    read_parser.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.0,
+        help="Filter out entries below this confidence threshold.",
+    )
+    read_parser.add_argument(
+        "--max-age-days",
+        type=int,
+        help="Filter out entries older than this many days unless --include-stale is set.",
     )
 
     write_parser = subparsers.add_parser(
@@ -814,6 +1112,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional short note explaining why the entry is trustworthy.",
     )
     write_parser.add_argument(
+        "--kind",
+        help="Optional entry kind such as policy, convention, preference, or fact.",
+    )
+    write_parser.add_argument(
+        "--review-after-days",
+        type=int,
+        help="Optional freshness window after which the entry should be reviewed.",
+    )
+    write_parser.add_argument(
         "--allow-duplicate",
         action="store_true",
         help="Allow an exact active duplicate inside the same topic.",
@@ -822,6 +1129,66 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="Return the proposed entry without writing it.",
+    )
+
+    promote_parser = subparsers.add_parser(
+        "promote",
+        parents=[common],
+        help="Assess a candidate and write it only when it truly belongs in shared memory.",
+    )
+    promote_parser.add_argument("--candidate", required=True, help="Candidate statement to promote.")
+    promote_parser.add_argument("--topic", required=True, help="Topic to append to when promotion succeeds.")
+    promote_parser.add_argument("--source", required=True, help="Who is promoting the entry.")
+    promote_parser.add_argument(
+        "--confidence",
+        required=True,
+        type=float,
+        help="Confidence score between 0.0 and 1.0.",
+    )
+    promote_parser.add_argument("--tags", default="", help="Optional comma-separated tags.")
+    promote_parser.add_argument("--evidence", help="Optional short note explaining why the entry is trustworthy.")
+    promote_parser.add_argument(
+        "--kind",
+        help="Optional entry kind such as policy, convention, preference, or fact.",
+    )
+    promote_parser.add_argument(
+        "--review-after-days",
+        type=int,
+        help="Optional freshness window after which the entry should be reviewed.",
+    )
+    promote_parser.add_argument(
+        "--scope",
+        required=True,
+        choices=tuple(sorted(VALID_MEMORY_SCOPES)),
+        help="Where the information is expected to remain useful: runtime, project, or cross-agent.",
+    )
+    promote_parser.add_argument(
+        "--stability",
+        required=True,
+        choices=tuple(sorted(VALID_STABILITY_LEVELS)),
+        help="How stable the information is: ephemeral, evolving, or stable.",
+    )
+    promote_parser.add_argument(
+        "--sensitivity",
+        required=True,
+        choices=tuple(sorted(VALID_SENSITIVITY_LEVELS)),
+        help="Whether the information is public/internal or secret.",
+    )
+    promote_parser.add_argument(
+        "--context-independent",
+        required=True,
+        choices=tuple(sorted(VALID_CONTEXT_LEVELS)),
+        help="Whether another agent can apply it safely without hidden local context.",
+    )
+    promote_parser.add_argument(
+        "--allow-duplicate",
+        action="store_true",
+        help="Allow an exact active duplicate inside the same topic.",
+    )
+    promote_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Return the proposed promotion result without writing it.",
     )
 
     deprecate_parser = subparsers.add_parser(
@@ -871,6 +1238,9 @@ def run_command(args: argparse.Namespace) -> Dict[str, Any]:
             query=args.query,
             topic_filter=args.topic,
             include_deprecated=args.include_deprecated,
+            include_stale=args.include_stale,
+            min_confidence=ensure_confidence(args.min_confidence),
+            max_age_days=ensure_positive_int(args.max_age_days, "--max-age-days"),
             limit=args.limit,
         )
     if args.command == "read":
@@ -879,6 +1249,9 @@ def run_command(args: argparse.Namespace) -> Dict[str, Any]:
             memory_file=memory_file,
             topic=args.topic,
             include_deprecated=args.include_deprecated,
+            include_stale=args.include_stale,
+            min_confidence=ensure_confidence(args.min_confidence),
+            max_age_days=ensure_positive_int(args.max_age_days, "--max-age-days"),
         )
     if args.command == "write":
         return write_entry(
@@ -890,6 +1263,27 @@ def run_command(args: argparse.Namespace) -> Dict[str, Any]:
             confidence=args.confidence,
             tags=args.tags,
             evidence=args.evidence,
+            kind=args.kind,
+            review_after_days=args.review_after_days,
+            allow_duplicate=args.allow_duplicate,
+            dry_run=args.dry_run,
+        )
+    if args.command == "promote":
+        return promote_candidate(
+            store=store,
+            memory_file=memory_file,
+            candidate=args.candidate,
+            scope=args.scope,
+            stability=args.stability,
+            sensitivity=args.sensitivity,
+            context_independent=args.context_independent,
+            topic=args.topic,
+            source=args.source,
+            confidence=args.confidence,
+            tags=args.tags,
+            evidence=args.evidence,
+            kind=args.kind,
+            review_after_days=args.review_after_days,
             allow_duplicate=args.allow_duplicate,
             dry_run=args.dry_run,
         )
