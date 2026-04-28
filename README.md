@@ -41,18 +41,6 @@ This skill solves that specific problem by providing:
 - an auditable deprecation model instead of deletion
 - tests and evaluation artifacts for maintainers
 
-## New Capabilities In This Sync
-
-This source repository now includes several policy-oriented upgrades that make shared memory safer to consume from automation, not just easier to write to:
-
-- **Assessed Promotion Workflow**: `manage_memory.py promote` lets an agent assess a candidate and write it in one audited step instead of manually chaining `assess` and `write`.
-- **Confidence-Gated Reads**: `read` and `search` can filter out low-confidence entries so automation can avoid weak policy guidance.
-- **Freshness-Gated Reads**: entries can carry `last_reviewed_at` and `review_after_days`, which lets consuming tools ignore stale policy until it is reviewed.
-- **Policy Metadata**: entries can now include a lightweight `kind` such as `policy`, `convention`, `preference`, or `fact` so downstream consumers can reason about them more safely.
-- **Routing Policy Support**: the shared store can now act as the cross-project default layer for dispatcher routing policies without turning into a general task scratchpad.
-
-The practical effect is that agents can now post stable cross-project guidance themselves through the CLI, while readers can apply stronger trust and freshness boundaries before using that guidance.
-
 ## Repository Layout
 
 - `SKILL.md`: agent-facing contract and workflow

@@ -1,18 +1,19 @@
 ---
 name: shared-memory
-description: Deliberately assess, retrieve, validate, write, or deprecate persistent cross-agent knowledge that should be reused across multiple agents, skills, or repositories. Use when Codex needs a durable shared ledger for stable conventions, reusable prompt patterns, organization-wide defaults, or broad operating guardrails. Do not use for runtime notes, task plans, repo-local context, secrets, or speculative observations.
+description: Deliberately assess, retrieve, validate, write, or deprecate persistent cross-agent knowledge that should be reused across multiple agents, skills, or repositories. Use when Codex needs a durable shared ledger for stable conventions, reusable prompt patterns, organization-wide defaults, or broad operating guardrails. ALWAYS trigger this skill when a user asks to "remember", "save", or "note" information that has value beyond the current turn, including cross-agent project handoffs, mission state, and workflow policies.
 metadata:
+  dispatcher-persistent-directories: 
   dispatcher-layer: information
   dispatcher-lifecycle: active
   author: jovd83
-  version: "2.4.0"
-  dispatcher-output-artifacts: shared_policy_entry, policy_lookup_result, deprecation_record
+  version: "2.5.0"
+  dispatcher-output-artifacts: shared_policy_entry, policy_lookup_result, deprecation_record, handoff_summary
   dispatcher-risk: medium
   dispatcher-writes-files: true
   dispatcher-input-artifacts: memory_query, policy_candidate, validation_evidence, deprecation_request
-  dispatcher-capabilities: shared-policy-management, memory-curation, durable-convention-storage
-  dispatcher-stack-tags: memory, governance, cross-project
-  dispatcher-accepted-intents: read_shared_policy, write_shared_policy, deprecate_shared_policy
+  dispatcher-capabilities: shared-policy-management, memory-curation, durable-convention-storage, mission-state-tracking, handoff-coordination
+  dispatcher-stack-tags: memory, governance, cross-project, handoff
+  dispatcher-accepted-intents: read_shared_policy, write_shared_policy, deprecate_shared_policy, record_handoff, query_mission_state
   dispatcher-category: analysis
 ---
 
@@ -23,7 +24,7 @@ metadata:
 
 # Shared Memory Skill
 
-[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](CHANGELOG.md)
 
 Use this skill only for deliberate promotion of durable cross-agent knowledge.
 
@@ -32,17 +33,17 @@ Use this skill only for deliberate promotion of durable cross-agent knowledge.
 Shared memory is the top persistence layer in a three-layer model:
 
 - Runtime memory: ephemeral notes for the current task or thread
-- Project / skill memory: persistent but local to one repository, project, or skill
-- Shared memory: persistent knowledge that should be reused across multiple agents, skills, or repositories
+- Project / skill memory: persistent but local to one repository or skill
+- Shared memory: persistent knowledge that should be reused across multiple agents, skills, or repositories, INCLUDING cross-agent project handoffs and mission state.
 
-If the information does not clearly belong in the third layer, do not write it here.
+If the information has value for the *next* agent picking up a project, it belongs in the shared layer.
 
 ## Decision Gate
 
 Before invoking a write, confirm every condition:
 
 1. The information is useful beyond the current task.
-2. It applies across multiple agents, skills, or repositories.
+2. It applies across multiple agents, skills, or repositories (OR it is a project handoff for a multi-agent mission).
 3. Another agent can use it safely without hidden local context.
 4. It is stable enough to remain useful after the current task ends.
 5. It contains no secrets, credentials, personal data, customer data, or sensitive one-off artifacts.
@@ -50,126 +51,74 @@ Before invoking a write, confirm every condition:
 If any condition fails:
 
 - Use runtime memory for task-local notes.
-- Use project / skill memory for repository-local persistent knowledge.
+- Use project / skill memory for repository-local persistent knowledge that doesn't need to be seen by agents in other repositories.
 - Reject the candidate entirely if it is secret, unstable, or speculative.
-
 ## Available Resources
 
-- `scripts/manage_memory.py`: supported CLI for assessing candidates and managing the shared store
+- `scripts/manage_memory.py`: supported CLI for assessing candidates and managing the shared store. Includes `list-active` for mission discovery and `status-report` for health checks.
 - `references/promotion-guide.md`: promotion checklist, anti-patterns, and topic naming guidance
 - `references/schema.md`: canonical store schema and CLI response contract
 - `assets/shared-memory-template.json`: example store layout
 
-If the boundary is clear and you already have the candidate plus metadata, you may use the `promote` command as a one-step assessed write instead of chaining `assess` and `write` manually.
-
 ## Required Workflow
 
-1. Assess the candidate before writing if the boundary is not obviously shared.
-
+### 0. Mission Start (Mandatory)
+Before starting any complex task, high-risk execution, or multi-agent mission, ALWAYS search shared memory for relevant `MissionState` or `RoutingPolicies`.
+If you are unsure of the project name, use the discovery command:
 ```bash
-python scripts/manage_memory.py assess \
-  --candidate "Use Conventional Commits across shared repositories unless a local guide overrides them." \
-  --scope cross-agent \
-  --stability stable \
-  --sensitivity internal \
-  --context-independent yes \
-  --format json
+python scripts/manage_memory.py list-active --format json
+```
+Then read the specific state:
+```bash
+python scripts/manage_memory.py search --query "Auth Migration" --format json
+python scripts/manage_memory.py read --topic "RoutingPolicies" --format json
 ```
 
-2. Discover what already exists before creating or updating anything.
-
+### 1. Assess the candidate
+...
+### 8. Maintenance & Health (Janitor Routine)
+Periodically check the health of shared memory to identify stale mission states or outdated policies.
 ```bash
-python scripts/manage_memory.py list-topics --format json
-python scripts/manage_memory.py search --query "commit convention" --format json
+python scripts/manage_memory.py status-report --format json
 ```
+If an entry is flagged as stale (>30 days), either **Renew** it with a fresh status update or **Deprecate** it.
 
-3. Read the closest existing topic before deciding to append a new entry.
+Assess the candidate before writing if the boundary is not obviously shared.
+...
+(rest of the numbered workflow)
+...
+### 7. The Rule of Three (Proactive Promotion)
+If you find yourself writing or reading the same convention, policy, or fact in **3 or more** different repositories or projects, you MUST promote it to shared memory to ensure global consistency.
 
-```bash
-python scripts/manage_memory.py read --topic "CommitConventions" --format json
-```
+## Canonical Topic Taxonomy
+To prevent fragmentation, always use these standard topic names unless a specialized domain requires a new one:
 
-4. Write only verified, reusable knowledge.
-
-```bash
-python scripts/manage_memory.py write \
-  --topic "CommitConventions" \
-  --content "Use Conventional Commits across shared repositories unless a repository-specific guide overrides them." \
-  --source "Codex" \
-  --confidence 0.95 \
-  --tags "git,conventions" \
-  --evidence "Repeated across shared engineering guidance and multiple repositories." \
-  --format json
-```
-
-5. Deprecate obsolete guidance instead of deleting it.
-
-```bash
-python scripts/manage_memory.py deprecate \
-  --topic "CommitConventions" \
-  --id 3 \
-  --reason "Superseded by the updated shared engineering standard." \
-  --format json
-```
-
-6. Validate the store before relying on it if it looks legacy, hand-edited, or inconsistent.
-
-```bash
-python scripts/manage_memory.py validate --format json
-```
-
-Optional shortcut for stable candidates that are ready for promotion:
-
-```bash
-python scripts/manage_memory.py promote \
-  --candidate "Prefer repo-native stacks over shared defaults unless compliance requires otherwise." \
-  --topic "RoutingPolicies" \
-  --source "SkillDispatcher" \
-  --confidence 0.92 \
-  --tags "routing,policy" \
-  --kind "policy" \
-  --review-after-days 365 \
-  --scope cross-agent \
-  --stability stable \
-  --sensitivity internal \
-  --context-independent yes \
-  --format json
-```
-
-## Response Contract
-
-When you use this skill, drive to one of four explicit outcomes:
-
-- `shared-memory`: read existing shared guidance or write a new shared entry
-- `project-memory`: redirect the information to project-local persistent storage
-- `runtime-memory`: keep the information in the current task or thread only
-- `reject`: refuse to persist the information because it is secret, unstable, or otherwise unsafe
-
-Prefer making that decision explicit in your reasoning and output, especially when the user asks to "remember" something.
+| Topic Name | Purpose |
+| :--- | :--- |
+| `MissionState` | Active project handoffs, status syncs, and multi-agent coordination. |
+| `RoutingPolicies` | Global rules for the `skill-dispatcher` and tool selection logic. |
+| `GlobalConventions` | Shared engineering standards (e.g. commit styles, linting rules). |
+| `SecurityPolicies` | Mandatory security workflows (e.g. `npm audit` requirements). |
+| `UserPreferences` | Durable cross-project user settings (e.g. "Prefer Playwright for E2E"). |
 
 ## Writing Standard
 
-Every shared-memory entry should be:
-
-- concise
-- auditable
-- context-independent
-- stable
-- safe to apply outside the originating repository
+### Handoff Template (Auditable & Actionable)
+When recording a project handoff in `MissionState`, use this structure:
+- **Project:** [Name]
+- **Status:** [Current Progress %]
+- **Done:** [Verified milestones]
+- **Blocked/Pending:** [Known bugs or missing prerequisites]
+- **Next Step:** [Specific action for the next agent]
+- **Context Link:** [Path to local logs or artifacts]
 
 Good entry shapes:
-
-- "Use sentence-case headings in shared technical docs unless a local style guide overrides them."
-- "Prefer JSON output from CLIs when the tool supports both text and JSON modes."
-- "When using Vite 7 with React 19, ensure the `@vitejs/plugin-react` version is 4.3.0+ to avoid HMR metadata bugs."
-- "Standardize on `reports/` as the default directory for all diagnostic and audit outputs."
-- "Use `py` launcher on Windows instead of `python` to ensure consistent version selection in multi-python environments."
-- "For existing repositories, prefer repo-native stacks over shared defaults unless a compliance rule overrides them."
+- "Handoff: 'Auth Migration' (50%). Done: JWT implementation. Blocked: Refresh token bug in prod. Next: Debug /tmp/auth-debug.log."
+- "Policy: Use sentence-case headings in shared technical docs unless a local style guide overrides them."
 
 Avoid entries that are:
 
-- task-local
-- repository-local
+- task-local (e.g. "I fixed line 42")
 - low-confidence
 - vague
 - dependent on hidden context
@@ -178,7 +127,7 @@ Avoid entries that are:
 ## Guardrails
 
 - Read before write.
-- Reuse durable topic names instead of creating near-duplicates.
+- Reuse durable topic names (e.g., `MissionState`, `RoutingPolicies`, `SecurityStandards`) instead of creating near-duplicates.
 - Do not edit the JSON store manually; use `scripts/manage_memory.py`.
 - Do not promote runtime memory directly into shared memory without deliberate review.
 - Deprecate outdated entries instead of deleting them so the audit trail remains intact.
@@ -186,10 +135,8 @@ Avoid entries that are:
 
 ## Gotchas
 
-- **Direct File Editing**: Manually editing the `~/.agent_shared_memory.json` file can cause validation errors and data loss if the CLI overwrites it. Always use the provided CLI tools.
-- **Topic Fragmentation**: Creating near-duplicate topic names (e.g., `CommitConvention` vs `CommitConventions`) fractures memory. Search and read existing topics before adding new ones.
+- **Topic Fragmentation**: Creating near-duplicate topic names (e.g., `Handoff` vs `MissionState`) fractures memory. Search and read existing topics before adding new ones.
 - **Implicit Context Dependency**: Storing entries that rely on local paths or repository-specific knowledge ("use the build script") makes them useless to other agents. Ensure entries are context-independent.
-- **Low Confidence Promotion**: Promoting information with a confidence lower than 0.5 will trigger warnings in `validate` and risk polluting the store with unstable guidance.
 - **Deletion vs Deprecation**: Attempting to delete an entry manually is discouraged. Use the `deprecate` command to maintain a stable audit trail for all shared knowledge.
 
 ## Failure Handling
@@ -197,16 +144,15 @@ Avoid entries that are:
 - If `assess` returns `project-memory`, `runtime-memory`, or `reject`, honor that boundary instead of forcing a write.
 - If `validate` reports malformed data, stop and repair the store before writing more entries.
 - If `write` returns `created: false`, inspect the existing active entry instead of forcing a duplicate.
-- If the candidate belongs to only one repository or skill, keep it in project-local memory instead.
 
 ## Integration Boundary
 
-This skill is responsible only for cross-agent shared memory.
+This skill is responsible only for cross-agent shared memory and cross-session mission state.
 
 It does not implement:
 
 - runtime scratchpads
-- project-local memory systems
+- repository-local file management
 - secret management
 - autonomous self-modifying memory pipelines
 

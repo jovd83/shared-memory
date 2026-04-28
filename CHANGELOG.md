@@ -2,15 +2,29 @@
 
 All notable changes to this skill are documented here.
 
-## [2.2.0] - 2026-04-14
+## [2.3.0] - 2026-04-28
+
+### Added
+
+- `list-active` command in `scripts/manage_memory.py` to filter and display active mission states.
+- `status-report` command in `scripts/manage_memory.py` for health checks and stale entry detection.
+- Handoff Template to `SKILL.md` for structured mission state recording.
 
 ### Changed
 
-- Mandatory telemetry and logging enforced via $skill-dispatcher for all memory operations.
-- Versioned documentation headers for improved repository clarity.
+- Refined memory categories in `SKILL.md` (GlobalConventions, SecurityPolicies, UserPreferences).
+- Improved Guardrails and Gotchas documentation for topic fragmentation and deletion safety.
+
+## [2.2.0] - 2026-04-18
+
+### Added
+
+- `promote` command in `scripts/manage_memory.py` for deterministic assessment-to-write workflow.
+- Freshness tracking with `last_reviewed_at` and `review_after_days` metadata.
+- Confidence-based filtering for `read` and `search` operations.
+- `kind` metadata field for categorization (policy, convention, preference, fact).
 
 ## [2.1.0] - 2026-03-20
-
 
 ### Changed
 

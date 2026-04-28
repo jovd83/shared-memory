@@ -402,6 +402,53 @@ def list_topics(store: Dict[str, Any], memory_file: Path) -> Dict[str, Any]:
     }
 
 
+def list_active_missions(store: Dict[str, Any], memory_file: Path) -> Dict[str, Any]:
+    topic = "MissionState"
+    missions = store.get("topics", {}).get(topic, [])
+    active = [m for m in missions if m.get("status") == ACTIVE_STATUS]
+    
+    return {
+        "command": "list-active-missions",
+        "memory_file": str(memory_file),
+        "topic": topic,
+        "active_count": len(active),
+        "missions": active
+    }
+
+
+def status_report(store: Dict[str, Any], memory_file: Path) -> Dict[str, Any]:
+    issues = []
+    topics_summary = {}
+    
+    for topic, entries in store.get("topics", {}).items():
+        active = [e for e in entries if e.get("status") == ACTIVE_STATUS]
+        topics_summary[topic] = len(active)
+        
+        # Freshness Check (Janitor Lite)
+        for entry in active:
+            created_at = entry.get("created_at")
+            if created_at:
+                try:
+                    dt = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                    age_days = (datetime.now(timezone.utc) - dt).days
+                    if age_days > 30:
+                        issues.append({
+                            "severity": "info",
+                            "topic": topic,
+                            "entry_id": entry["id"],
+                            "message": f"Stale entry: {age_days} days old. Consider review or deprecation."
+                        })
+                except ValueError:
+                    pass
+
+    return {
+        "command": "status-report",
+        "memory_file": str(memory_file),
+        "topics_summary": topics_summary,
+        "stale_issues": issues
+    }
+
+
 def search_entries(
     store: Dict[str, Any],
     memory_file: Path,
@@ -1025,6 +1072,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="List known topics with active and deprecated counts.",
     )
 
+    subparsers.add_parser(
+        "list-active",
+        parents=[common],
+        help="List all active mission states.",
+    )
+
+    subparsers.add_parser(
+        "status-report",
+        parents=[common],
+        help="Report on memory health and stale entries.",
+    )
+
     search_parser = subparsers.add_parser(
         "search",
         parents=[common],
@@ -1229,6 +1288,10 @@ def run_command(args: argparse.Namespace) -> Dict[str, Any]:
 
     if args.command == "list-topics":
         return list_topics(store, memory_file)
+    if args.command == "list-active":
+        return list_active_missions(store, memory_file)
+    if args.command == "status-report":
+        return status_report(store, memory_file)
     if args.command == "search":
         if args.limit <= 0:
             raise InputValidationError("--limit must be a positive integer.")
