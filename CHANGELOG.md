@@ -2,6 +2,16 @@
 
 All notable changes to this skill are documented here.
 
+## [2.4.0] - Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
 ## [2.3.0] - 2026-04-28
 
 ### Added
