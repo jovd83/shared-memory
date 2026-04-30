@@ -1,12 +1,9 @@
 ---
 name: shared-memory
-description: Deliberately assess, retrieve, validate, write, or deprecate persistent cross-agent knowledge that should be reused across multiple agents, skills, or repositories. Use when Codex needs a durable shared ledger for stable conventions, reusable prompt patterns, organization-wide defaults, or broad operating guardrails. ALWAYS trigger this skill when a user asks to "remember", "save", or "note" information that has value beyond the current turn, including cross-agent project handoffs, mission state, and workflow policies.
+description: Manage persistent cross-agent knowledge across agents, skills, and repos. Trigger to assess, retrieve, validate, or deprecate shared conventions, prompts, and org defaults. ALWAYS trigger on "remember", "save", or "note" for cross-turn info.
 metadata:
-  dispatcher-persistent-directories: 
   dispatcher-layer: information
   dispatcher-lifecycle: active
-  author: jovd83
-  version: "2.5.0"
   dispatcher-output-artifacts: shared_policy_entry, policy_lookup_result, deprecation_record, handoff_summary
   dispatcher-risk: medium
   dispatcher-writes-files: true
@@ -15,14 +12,18 @@ metadata:
   dispatcher-stack-tags: memory, governance, cross-project, handoff
   dispatcher-accepted-intents: read_shared_policy, write_shared_policy, deprecate_shared_policy, record_handoff, query_mission_state
   dispatcher-category: analysis
+
 ---
 
 ## Telemetry & Logging
 > [!IMPORTANT]
 > All usage of this skill must be logged via the Skill Dispatcher to ensure audit logs and wallboard analytics are accurate:
-> `./log-dispatch.cmd --skill <skill_name> --intent <intent> --reason <reason>` (or `./log-dispatch.sh` on Linux)
+> `./log-dispatch.cmd --skill <skill_name> --intent <intent> --model <model_name> --reason <reason>` (or `./log-dispatch.sh` on Linux)
 
 # Shared Memory Skill
+
+> **Author:** jovd83 | **Version:** 2.5.1
+
 
 [![Version](https://img.shields.io/badge/version-2.5.0-blue.svg)](CHANGELOG.md)
 

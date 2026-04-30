@@ -2,6 +2,11 @@
 
 All notable changes to this skill are documented here.
 
+## [2.5.1] - 2026-04-30
+
+### Changed
+- Trim `SKILL.md` frontmatter to fit the 1000-character dispatcher limit (description trim, migrate non-dispatcher fields to body).
+
 ## [2.4.0] - Unreleased
 
 ### Added
